@@ -28,7 +28,7 @@ Pin your own fake **buy** (bid), **sell** (ask), or **both** with `--bid-price` 
 | TUI, **manual bid** only | `python main.py tui --symbol SOLUSDT --bid-price 150.12` |
 | TUI, **default symbol** + defaults | `python main.py tui` |
 
-Stop any run with **Ctrl+C**. TUI needs the **`rich`** dependency (`pip install -e .`). The TUI uses Rich’s **alternate screen** so each tick redraws in place; if you still see stacked panels in a broken embedded terminal, try **Terminal.app** / **iTerm2** or widen the panel.
+Stop any run with **Ctrl+C**. TUI needs the **`rich`** dependency (`pip install -e .`). The TUI uses Rich’s **alternate screen** and a **`get_renderable` + lock** pattern so only Rich’s refresh thread paints (avoids calling `Live.update` from the asyncio depth loop, which often **stacks or tears** in embedded terminals). Virtual-fill logs are quieted to **WARNING** so they do not fight the UI. If it still misbehaves, try **Terminal.app** / **iTerm2** or a wider pane.
 
 ## CLI: `main.py`
 

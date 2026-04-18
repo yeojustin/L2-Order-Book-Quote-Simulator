@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
+import threading
 from typing import Any, Dict, Optional
 
 from rich import box
@@ -97,12 +99,11 @@ def _sim_panel(snap: Optional[SimTickSnapshot]) -> Panel:
 
 def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str, Any]] = None) -> None:
     """Depth ladder + virtual quote sim; ``sim_kwargs`` passed to ``make_book_tick_handler`` (except ``on_tick`` / ``log_ticks``)."""
-    # Integrated terminals (e.g. Cursor) sometimes mis-detect TTY; without this,
-    # Rich falls back to "print each frame" and the UI stacks down the scrollback.
-    console = Console(
-        force_terminal=True,
-        stderr=True,
-    )
+    # INFO logs during tight WS loops fight Rich's alternate screen; keep warnings+ only.
+    logging.getLogger("l2_sim.execution").setLevel(logging.WARNING)
+    logging.getLogger("l2_sim.simulation").setLevel(logging.WARNING)
+
+    console = Console(force_terminal=True)
     rows = max(1, min(rows, 500))
     boot = Panel(
         "Connecting to Binance depth…",
@@ -124,25 +125,33 @@ def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str,
         log_ticks=False,
     )
 
-    # screen=True: alternate buffer so each frame replaces the last (no stacking).
-    # auto_refresh=False: refresh only from our WS callback (avoids racing Live's thread).
+    disp_lock = threading.Lock()
+    root: dict[str, Any] = {"g": boot}
+
+    def get_renderable() -> Any:
+        with disp_lock:
+            return root["g"]
+
+    # Never call live.update() from the asyncio callback — only Rich's refresh thread
+    # should paint. That avoids stacked / torn frames in embedded terminals.
+    def on_book(book: BinanceOrderBook) -> None:
+        sim_on_book(book)
+        g = Group(depth_panel(book, rows), _sim_panel(last_snap[0]))
+        with disp_lock:
+            root["g"] = g
+
     with Live(
         boot,
         console=console,
         screen=True,
         transient=True,
-        auto_refresh=False,
+        auto_refresh=True,
+        refresh_per_second=20,
+        vertical_overflow="visible",
+        get_renderable=get_renderable,
         redirect_stdout=True,
         redirect_stderr=True,
-    ) as live:
-
-        def on_book(book: BinanceOrderBook) -> None:
-            sim_on_book(book)
-            live.update(
-                Group(depth_panel(book, rows), _sim_panel(last_snap[0])),
-                refresh=True,
-            )
-
+    ):
         try:
             asyncio.run(
                 run_live_book(
@@ -156,4 +165,4 @@ def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str,
             pass
         finally:
             if sys.stderr.isatty():
-                console.print("\n[dim]Stopped.[/dim]", stderr=True)
+                print("\nStopped.", file=sys.stderr)
