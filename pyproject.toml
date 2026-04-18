@@ -12,6 +12,7 @@ dependencies = [
     "requests>=2.28",
     "websockets>=12",
     "sortedcontainers>=2.4.0",
+    "rich>=13.0",
 ]
 
 [tool.setuptools.packages.find]

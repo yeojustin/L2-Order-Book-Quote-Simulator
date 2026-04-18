@@ -20,10 +20,17 @@ def _parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default="live",
-        choices=("live", "quote"),
-        help="live = depth only; quote = depth + sim tick",
+        choices=("live", "quote", "tui"),
+        help="live = depth only; quote = depth + sim; tui = live depth table (Rich)",
     )
     p.add_argument("--symbol", default=DEFAULT_SYMBOL, help="e.g. SOLUSDT")
+    p.add_argument(
+        "--depth",
+        type=int,
+        default=15,
+        metavar="N",
+        help="tui: number of bid/ask rows to show (default 15)",
+    )
     p.add_argument(
         "--quote-mode",
         choices=("cross", "sym"),
@@ -75,11 +82,24 @@ def _maybe_setup_logging(*, quote: bool, log_file: Optional[str], debug: bool) -
 def main() -> None:
     args = _parser().parse_args()
     quote = args.command == "quote"
-    if not quote and (args.bid_price is not None or args.ask_price is not None):
+    tui = args.command == "tui"
+    if not quote and not tui and (args.bid_price is not None or args.ask_price is not None):
         raise SystemExit("error: --bid-price / --ask-price only apply to `quote`")
     _maybe_setup_logging(quote=quote, log_file=args.log_file, debug=args.debug)
 
-    if quote:
+    if tui:
+        try:
+            from l2_sim.tui_depth import run_depth_tui
+        except ImportError as exc:
+            raise SystemExit(
+                "error: `tui` needs the `rich` package. Run: pip install -e ."
+            ) from exc
+        try:
+            run_depth_tui(args.symbol, args.depth)
+        except KeyboardInterrupt:
+            print("\n[!] Stopped by user.", file=sys.stderr)
+            raise SystemExit(0) from None
+    elif quote:
         tick = make_book_tick_handler(
             obi_depth=args.obi_depth,
             half_spread=args.half_spread,

@@ -82,7 +82,7 @@ class BinanceOrderBook:
         self.levels = L2Book()
         self.last_update_id: int = 0
 
-    def fetch_snapshot(self) -> None:
+    def fetch_snapshot(self, *, echo: bool = True) -> None:
         response = requests.get(depth_rest_url(self.symbol), timeout=HTTP_TIMEOUT)
         response.raise_for_status()
         body = response.json()
@@ -97,7 +97,8 @@ class BinanceOrderBook:
         bid_pairs = ((float(p), float(q)) for p, q in body["bids"])
         ask_pairs = ((float(p), float(q)) for p, q in body["asks"])
         self.levels.load_snapshot(bid_pairs, ask_pairs)
-        print(f"[*] Snapshot fetched. lastUpdateId={self.last_update_id}")
+        if echo:
+            print(f"[*] Snapshot fetched. lastUpdateId={self.last_update_id}")
 
     def apply_depth_event(self, event: Dict[str, Any]) -> None:
         if not _is_depth_diff_message(event):
@@ -169,6 +170,9 @@ async def _run_single_connection(
     book: BinanceOrderBook,
     symbol: str,
     on_book_event: Optional[Callable[..., None]] = None,
+    *,
+    status_interval: Optional[float] = 1.0,
+    echo_snapshot: bool = True,
 ) -> None:
     """One WS session: snapshot, merge buffer, then live apply loop."""
     queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
@@ -182,7 +186,7 @@ async def _run_single_connection(
     ) as ws:
         reader = asyncio.create_task(_pump_depth_json(ws, queue))
         try:
-            await asyncio.to_thread(book.fetch_snapshot)
+            await asyncio.to_thread(book.fetch_snapshot, echo=echo_snapshot)
             snapshot_id = book.last_update_id
 
             pending = _drain_queue_nowait(queue)
@@ -221,7 +225,7 @@ async def _run_single_connection(
                     except Exception:
                         logger.exception("on_book_event callback failed")
                 now = time.monotonic()
-                if now - last_print >= 1.0:
+                if status_interval is not None and now - last_print >= status_interval:
                     book.display_status()
                     last_print = now
         finally:
@@ -234,13 +238,21 @@ async def run_live_book(
     symbol: str = DEFAULT_SYMBOL,
     *,
     on_book_event: Optional[Callable[..., None]] = None,
+    status_interval: Optional[float] = 1.0,
+    echo_snapshot: bool = True,
 ) -> None:
     """Reconnect forever; optional callback after each depth apply."""
     delay = RESYNC_DELAY_START
     while True:
         book = BinanceOrderBook(symbol)
         try:
-            await _run_single_connection(book, symbol, on_book_event=on_book_event)
+            await _run_single_connection(
+                book,
+                symbol,
+                on_book_event=on_book_event,
+                status_interval=status_interval,
+                echo_snapshot=echo_snapshot,
+            )
             delay = RESYNC_DELAY_START
         except asyncio.CancelledError:
             raise

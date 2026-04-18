@@ -22,21 +22,24 @@ Pin your own fake **buy** (bid), **sell** (ask), or **both** with `--bid-price` 
 | Sim + **your bid only** (buy side) | `python main.py quote --symbol SOLUSDT --bid-price 150.12` |
 | Sim + **your ask only** (sell side) | `python main.py quote --symbol SOLUSDT --ask-price 150.88` |
 | Sim + **your bid and ask** | `python main.py quote --symbol SOLUSDT --bid-price 150.12 --ask-price 150.88` |
+| **Depth TUI** (live bid/ask ladder in the terminal, [Rich](https://github.com/Textualize/rich)) | `python main.py tui --symbol SOLUSDT --depth 20` |
 
 Stop any run with **Ctrl+C**.
 
 ## CLI: `main.py`
 
-**Pattern:** `python main.py [live | quote] …flags`
+**Pattern:** `python main.py [live | quote | tui] …flags`
 
 - **`live`** — depth sync only; prints bid/ask style output from `order_book.py` (no sim).
 - **`quote`** — same feed, plus sim lines (`mid`, `obi`, fills, fake quotes, etc.).
+- **`tui`** — same feed; **Rich** live table of top **N** bid/ask rows (`--depth`, default 15). No one-line `display_status` spam; snapshot line suppressed so the layout stays clean.
 
 ### Flags (what to pass)
 
 | Flag | Default | Used with | Purpose |
 |------|---------|-----------|---------|
-| `--symbol` | value of `DEFAULT_SYMBOL` in `order_book.py` | both | Binance spot pair, e.g. `SOLUSDT`, `BTCUSDT`. |
+| `--symbol` | value of `DEFAULT_SYMBOL` in `order_book.py` | all | Binance spot pair, e.g. `SOLUSDT`, `BTCUSDT`. |
+| `--depth` | `15` | `tui` | How many price levels to show on each side (capped at 500 in code). |
 | `--quote-mode` | `cross` | `quote` only* | `cross` — quotes from mid/spread so they can cross the touch (fills more likely). `sym` — bid/ask at `mid ± half_spread`. |
 | `--cross-k` | `0.5001` | `quote` + `cross`* | In `cross` mode: larger than `0.5` pushes bid up / ask down vs spread (more aggressive). |
 | `--half-spread` | `0.05` | `quote` + `sym`* | Half-width around mid in `sym` mode. Too large vs real spread → often no fills. |
@@ -45,8 +48,8 @@ Stop any run with **Ctrl+C**.
 | `--inventory-gamma` | `0.02` | `quote`* | Skews formula quotes by `gamma × position` (ignored for manual fixed prices). |
 | `--bid-price` | (unset) | `quote` only | Fixed fake **bid** at this price; omit side = no bid quote. |
 | `--ask-price` | (unset) | `quote` only | Fixed fake **ask** at this price; omit side = no ask quote. |
-| `--log-file` | (unset) | both | Append logs to this file. |
-| `--debug` | off | both | DEBUG log level. |
+| `--log-file` | (unset) | `live` / `quote` | Append logs to this file. |
+| `--debug` | off | `live` / `quote` | DEBUG log level. |
 
 \*If you set **`--bid-price` and/or `--ask-price`**, the run uses **only** those fixed sides; **`--quote-mode`**, **`--cross-k`**, **`--half-spread`**, and **`--inventory-gamma`** are not applied to prices** (manual pricing mode).
 
@@ -55,6 +58,9 @@ Stop any run with **Ctrl+C**.
 ```bash
 # Live tape only
 python main.py live --symbol ETHUSDT
+
+# Live depth ladder (terminal UI)
+python main.py tui --symbol BTCUSDT --depth 12
 
 # Default sim: cross-style quotes (good default to see fills)
 python main.py quote --symbol SOLUSDT
@@ -100,6 +106,7 @@ Fills: buy if `q_bid` is set and `q_bid >= ba`; sell if `q_ask` is set and `q_as
 - `order_book.py` — websocket + REST sync
 - `l2_sim/l2_book.py` — L2 levels in memory
 - `l2_sim/obi.py`, `quoting.py`, `execution.py`, `inventory.py`, `simulation.py` — sim pieces
+- `l2_sim/tui_depth.py` — Rich depth panel for `main.py tui`
 - `main.py` — CLI above
 
 ## Diagrams
