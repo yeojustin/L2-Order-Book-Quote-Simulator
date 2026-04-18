@@ -139,3 +139,6 @@ flowchart TD
 ## Cloud
 
 No deploy scripts. Run the same Python on a VM near the exchange if latency matters; use a supervisor and `--log-file` if you want disk logs.
+---
+
+*Housekeeping:* commit message uses **implement** (spelling); TUI remains `python main.py tui` (see CLI).

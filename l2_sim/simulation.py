@@ -68,3 +68,4 @@ def make_book_tick_handler(
             )
 
     return on_book
+# housekeeping: no functional change

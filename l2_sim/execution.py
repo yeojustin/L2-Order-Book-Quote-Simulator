@@ -54,3 +54,4 @@ class VirtualExecutionListener:
             if self._on_fill is not None:
                 self._on_fill(fill)
         return new
+# housekeeping: no functional change

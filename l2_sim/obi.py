@@ -15,3 +15,4 @@ def order_book_imbalance(book: L2Book, depth: int = 10) -> Optional[float]:
     if total <= 0:
         return None
     return (bid_vol - ask_vol) / total
+# housekeeping: no functional change

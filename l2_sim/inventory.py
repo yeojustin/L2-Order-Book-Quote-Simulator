@@ -39,3 +39,4 @@ class InventoryState:
             self.position_base -= size_base
         self._last_fill_side = side
         self._last_fill_mid = mid_at_fill
+# housekeeping: no functional change

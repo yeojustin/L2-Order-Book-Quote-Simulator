@@ -90,3 +90,4 @@ def run_depth_tui(symbol: str, rows: int = 15) -> None:
             )
         except KeyboardInterrupt:
             console.print("\n[dim]Stopped.[/dim]")
+# housekeeping: no functional change
