@@ -28,7 +28,7 @@ Pin your own fake **buy** (bid), **sell** (ask), or **both** with `--bid-price` 
 | TUI, **manual bid** only | `python main.py tui --symbol SOLUSDT --bid-price 150.12` |
 | TUI, **default symbol** + defaults | `python main.py tui` |
 
-Stop any run with **Ctrl+C**. TUI needs the **`rich`** dependency (`pip install -e .`). The TUI uses Rich’s **alternate screen** and a **`get_renderable` + lock** pattern so only Rich’s refresh thread paints (avoids calling `Live.update` from the asyncio depth loop, which often **stacks or tears** in embedded terminals). Virtual-fill logs are quieted to **WARNING** so they do not fight the UI. If it still misbehaves, try **Terminal.app** / **iTerm2** or a wider pane.
+Stop any run with **Ctrl+C**. **`rich`** is required for `tui` (`pip install -e .`).
 
 ## CLI: `main.py`
 
@@ -36,11 +36,11 @@ Stop any run with **Ctrl+C**. TUI needs the **`rich`** dependency (`pip install 
 
 - **`live`** — depth sync only; prints bid/ask style output from `order_book.py` (no sim).
 - **`quote`** — same feed, plus sim lines to stdout / logs (`mid`, `obi`, fills, fake quotes, etc.).
-- **`tui`** — same feed and **same virtual quote sim** as `quote`, shown in a **Rich** `Live` layout: **depth table** (top `--depth` levels per side) and a **sim stats** panel (`mid`, `obi`, `inv`, fills, `bb`/`ba`, `q_bid`/`q_ask`). Per-tick `logger.info` lines from the sim are **off** in `tui` (so the screen is not flooded); virtual fills may still log at INFO unless you tune logging. Periodic `display_status` and snapshot `print` are off.
+- **`tui`** — same feed + **same sim** as `quote`, in a **Rich** `Live` dashboard (depth + sim). Sim per-tick `logger.info` is off in `tui`; fill/sim noise is capped at **WARNING** so the UI stays readable.
 
 ### `tui` vs `quote`
 
-Use **`quote`** when you want a **log stream**. Use **`tui`** when you want a **terminal UI**. They share the **same flags** for the simulator: `--quote-mode`, `--cross-k`, `--half-spread`, `--quote-size`, `--obi-depth`, `--inventory-gamma`, `--bid-price`, `--ask-price`, plus **`--depth`** (TUI-only: ladder rows). **`--symbol`**, **`--log-file`**, **`--debug`** apply to both.
+**`quote`** = text logs. **`tui`** = Rich panels. Same sim flags: `--quote-mode`, `--cross-k`, `--half-spread`, `--quote-size`, `--obi-depth`, `--inventory-gamma`, `--bid-price`, `--ask-price`, and **`--depth`** (ladder rows). **`--symbol`**, **`--log-file`**, **`--debug`** apply to both.
 
 ### Flags (what to pass)
 
@@ -105,7 +105,7 @@ python main.py quote --symbol SOLUSDT --log-file lob.log --debug
 
 **Sim** (`main.py quote`): `mid`, `obi`, `inv`, `adverse`, `total_fills`, `tick_fills`, `bb`/`ba` (book touch), `q_bid`/`q_ask` (fake quotes; `None` if that side is off).
 
-**TUI** (`main.py tui`): **(1)** depth table — **Bid size · Bid · Ask · Ask size** (touch on row 0); title: symbol and `lastUpdateId`; subtitle: **mid** / **spread**. **(2)** sim panel — same fields as the `quote` log line (`mid`, `obi`, `inv`, `adverse`, `total_fills`, `tick_fills`, `bb`, `ba`, `q_bid`, `q_ask`).
+**TUI** (`main.py tui`): depth table (**Bid size · Bid · Ask · Ask size**) + sim table (`mid`, `obi`, `inv`, `adverse`, fills, `bb`/`ba`, `q_bid`/`q_ask`). Title shows `lastUpdateId`; subtitle shows **mid** / **spread** when available.
 
 Fills: buy if `q_bid` is set and `q_bid >= ba`; sell if `q_ask` is set and `q_ask <= bb`.
 

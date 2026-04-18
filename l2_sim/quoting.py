@@ -68,4 +68,3 @@ class VirtualQuoter:
             size_bid=self.base_size,
             size_ask=self.base_size,
         )
-# housekeeping: no functional change

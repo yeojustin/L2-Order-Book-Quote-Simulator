@@ -290,4 +290,3 @@ if __name__ == "__main__":
     # ping_depth(DEFAULT_SYMBOL)
     # test_fetch_snapshot(DEFAULT_SYMBOL)
     run_asyncio_main()
-# housekeeping: no functional change

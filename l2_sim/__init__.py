@@ -15,4 +15,3 @@ __all__ = [
     "VirtualQuoter",
     "order_book_imbalance",
 ]
-# housekeeping: no functional change

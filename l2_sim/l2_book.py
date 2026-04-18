@@ -96,4 +96,3 @@ class L2Book:
 
     def depth_dicts(self) -> Tuple[Dict[float, float], Dict[float, float]]:
         return dict(self._bids), dict(self._asks)
-# housekeeping: no functional change

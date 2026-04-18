@@ -66,11 +66,12 @@ def depth_panel(book: BinanceOrderBook, rows: int) -> Panel:
         subtitle_parts.append(f"spread {_fmt_num(sp, 8)}")
     sub = "  ·  ".join(subtitle_parts) if subtitle_parts else ""
     title = f"{book.symbol}  lastUpdateId={book.last_update_id}"
+    footer = sub + "  —  Ctrl+C to quit" if sub else "Ctrl+C to quit"
     return Panel(
         table,
         title=title,
         title_align="left",
-        subtitle=sub + "  —  Ctrl+C to quit" if sub else "Ctrl+C to quit",
+        subtitle=footer,
         subtitle_align="left",
         border_style="cyan",
     )
@@ -82,7 +83,7 @@ def _sim_panel(snap: Optional[SimTickSnapshot]) -> Panel:
     t.add_column("Value", no_wrap=True)
     if snap is None:
         t.add_row("status", "waiting for book…")
-        return Panel(t, title="Quote sim (same flags as quote)", border_style="magenta")
+        return Panel(t, title="Quote sim", border_style="magenta")
 
     t.add_row("mid", _fmt_opt_px(snap.mid, 8))
     t.add_row("obi", f"{snap.obi:+.3f}" if snap.obi is not None else "—")
@@ -94,22 +95,17 @@ def _sim_panel(snap: Optional[SimTickSnapshot]) -> Panel:
     t.add_row("ba", _fmt_opt_px(snap.best_ask_px, 4))
     t.add_row("q_bid", _fmt_opt_px(snap.q_bid, 4))
     t.add_row("q_ask", _fmt_opt_px(snap.q_ask, 4))
-    return Panel(t, title="Quote sim (same flags as quote)", border_style="magenta")
+    return Panel(t, title="Quote sim", border_style="magenta")
 
 
 def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str, Any]] = None) -> None:
-    """Depth ladder + virtual quote sim; ``sim_kwargs`` passed to ``make_book_tick_handler`` (except ``on_tick`` / ``log_ticks``)."""
-    # INFO logs during tight WS loops fight Rich's alternate screen; keep warnings+ only.
+    """Depth ladder + virtual quote sim; ``sim_kwargs`` → ``make_book_tick_handler``."""
     logging.getLogger("l2_sim.execution").setLevel(logging.WARNING)
     logging.getLogger("l2_sim.simulation").setLevel(logging.WARNING)
 
     console = Console(force_terminal=True)
     rows = max(1, min(rows, 500))
-    boot = Panel(
-        "Connecting to Binance depth…",
-        title=symbol.upper(),
-        border_style="cyan",
-    )
+    boot = Panel("Connecting…", title=symbol.upper(), border_style="cyan")
     sim_kwargs = dict(sim_kwargs or {})
     sim_kwargs.pop("on_tick", None)
     sim_kwargs.pop("log_ticks", None)
@@ -132,26 +128,26 @@ def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str,
         with disp_lock:
             return root["g"]
 
-    # Never call live.update() from the asyncio callback — only Rich's refresh thread
-    # should paint. That avoids stacked / torn frames in embedded terminals.
-    def on_book(book: BinanceOrderBook) -> None:
-        sim_on_book(book)
-        g = Group(depth_panel(book, rows), _sim_panel(last_snap[0]))
-        with disp_lock:
-            root["g"] = g
-
     with Live(
         boot,
         console=console,
         screen=True,
         transient=True,
         auto_refresh=True,
-        refresh_per_second=20,
+        refresh_per_second=30,
         vertical_overflow="visible",
         get_renderable=get_renderable,
         redirect_stdout=True,
         redirect_stderr=True,
-    ):
+    ) as live:
+
+        def on_book(book: BinanceOrderBook) -> None:
+            sim_on_book(book)
+            g = Group(depth_panel(book, rows), _sim_panel(last_snap[0]))
+            with disp_lock:
+                root["g"] = g
+            live.refresh()
+
         try:
             asyncio.run(
                 run_live_book(

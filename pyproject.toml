@@ -21,4 +21,3 @@ include = ["l2_sim*"]
 
 [tool.setuptools]
 py-modules = ["order_book"]
-# housekeeping: no functional change

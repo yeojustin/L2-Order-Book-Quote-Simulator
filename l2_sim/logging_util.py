@@ -17,4 +17,3 @@ def setup_logging(level: int = logging.INFO, log_file: Optional[str] = None) -> 
         handlers=handlers,
         force=True,
     )
-# housekeeping: no functional change
