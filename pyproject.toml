@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "l2-order-book-quoting-siumulator"
+version = "0.1.0"
+description = "Binance spot depth sync and small quote sim."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.28",
+    "websockets>=12",
+    "sortedcontainers>=2.4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["l2_sim*"]
+
+[tool.setuptools]
+py-modules = ["order_book"]
