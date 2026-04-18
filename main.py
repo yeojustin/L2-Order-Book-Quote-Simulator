@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import logging
 import sys
-from typing import Optional
+from typing import Any, Optional
 
 from order_book import DEFAULT_SYMBOL, run_live_book
 
@@ -14,8 +14,24 @@ from l2_sim.logging_util import setup_logging
 from l2_sim.simulation import make_book_tick_handler
 
 
+def _sim_tick_kwargs(namespace: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "obi_depth": namespace.obi_depth,
+        "half_spread": namespace.half_spread,
+        "quote_size": namespace.quote_size,
+        "inventory_gamma": namespace.inventory_gamma,
+        "quote_mode": namespace.quote_mode,
+        "cross_k": namespace.cross_k,
+        "manual_bid": namespace.bid_price,
+        "manual_ask": namespace.ask_price,
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Binance spot L2: live or quote sim.")
+    p = argparse.ArgumentParser(
+        description="Binance spot L2: live or quote sim.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     p.add_argument(
         "command",
         nargs="?",
@@ -29,7 +45,22 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=15,
         metavar="N",
-        help="tui: number of bid/ask rows to show (default 15)",
+        help="tui: number of bid/ask rows to show",
+    )
+    opt_feed = p.add_argument_group("optional feed tuning")
+    opt_feed.add_argument(
+        "--ws-depth-speed",
+        choices=("100ms", "1000ms"),
+        default="100ms",
+        help="Binance diff-depth stream cadence @depth@… (omit = default)",
+    )
+    opt_tui = p.add_argument_group("optional tui display")
+    opt_tui.add_argument(
+        "--tui-refresh-hz",
+        type=float,
+        default=30.0,
+        metavar="HZ",
+        help="Rich Live poll rate 1–60 Hz (tui only; omit = default)",
     )
     p.add_argument(
         "--quote-mode",
@@ -49,7 +80,7 @@ def _parser() -> argparse.ArgumentParser:
         default=0.05,
         help="sym mode only: half distance from mid",
     )
-    p.add_argument("--quote-size", type=float, default=0.1, help="fake order size (base)")
+    p.add_argument("--quote-size", type=float, default=0.1, help="sim order size per side (base)")
     p.add_argument("--obi-depth", type=int, default=10, help="levels per side for OBI")
     p.add_argument(
         "--inventory-gamma",
@@ -63,13 +94,13 @@ def _parser() -> argparse.ArgumentParser:
         "--bid-price",
         type=float,
         default=None,
-        help="fixed fake bid only (optional; overrides bid from quote-mode)",
+        help="fixed sim bid only (optional; overrides bid from quote-mode)",
     )
     p.add_argument(
         "--ask-price",
         type=float,
         default=None,
-        help="fixed fake ask only (optional; overrides ask from quote-mode)",
+        help="fixed sim ask only (optional; overrides ask from quote-mode)",
     )
     return p
 
@@ -99,35 +130,30 @@ def main() -> None:
                 "error: `tui` needs the `rich` package. Run: pip install -e ."
             ) from exc
         try:
-            sim_kw = {
-                "obi_depth": args.obi_depth,
-                "half_spread": args.half_spread,
-                "quote_size": args.quote_size,
-                "inventory_gamma": args.inventory_gamma,
-                "quote_mode": args.quote_mode,
-                "cross_k": args.cross_k,
-                "manual_bid": args.bid_price,
-                "manual_ask": args.ask_price,
-            }
-            run_depth_tui(args.symbol, args.depth, sim_kwargs=sim_kw)
+            run_depth_tui(
+                args.symbol,
+                args.depth,
+                sim_kwargs=_sim_tick_kwargs(args),
+                depth_speed=args.ws_depth_speed,
+                refresh_hz=args.tui_refresh_hz,
+            )
         except KeyboardInterrupt:
             print("\n[!] Stopped by user.", file=sys.stderr)
             raise SystemExit(0) from None
     elif quote:
-        tick = make_book_tick_handler(
-            obi_depth=args.obi_depth,
-            half_spread=args.half_spread,
-            quote_size=args.quote_size,
-            inventory_gamma=args.inventory_gamma,
-            quote_mode=args.quote_mode,
-            cross_k=args.cross_k,
-            manual_bid=args.bid_price,
-            manual_ask=args.ask_price,
+        tick = make_book_tick_handler(**_sim_tick_kwargs(args))
+        asyncio.run(
+            run_live_book(
+                args.symbol,
+                on_book_event=tick,
+                depth_speed=args.ws_depth_speed,
+            )
         )
-        asyncio.run(run_live_book(args.symbol, on_book_event=tick))
     else:
         try:
-            asyncio.run(run_live_book(args.symbol))
+            asyncio.run(
+                run_live_book(args.symbol, depth_speed=args.ws_depth_speed)
+            )
         except KeyboardInterrupt:
             print("\n[!] Stopped by user.", file=sys.stderr)
             raise SystemExit(0) from None

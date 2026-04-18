@@ -32,7 +32,6 @@ def _fmt_opt_px(x: Optional[float], decimals: int = 6) -> str:
 
 
 def depth_panel(book: BinanceOrderBook, rows: int) -> Panel:
-    rows = max(1, rows)
     lv = book.levels
     bids = lv.top_bid_levels(rows)
     asks = lv.top_ask_levels(rows)
@@ -83,7 +82,7 @@ def _sim_panel(snap: Optional[SimTickSnapshot]) -> Panel:
     t.add_column("Value", no_wrap=True)
     if snap is None:
         t.add_row("status", "waiting for book…")
-        return Panel(t, title="Quote sim", border_style="magenta")
+        return Panel(t, title="Sim", border_style="magenta")
 
     t.add_row("mid", _fmt_opt_px(snap.mid, 8))
     t.add_row("obi", f"{snap.obi:+.3f}" if snap.obi is not None else "—")
@@ -95,20 +94,26 @@ def _sim_panel(snap: Optional[SimTickSnapshot]) -> Panel:
     t.add_row("ba", _fmt_opt_px(snap.best_ask_px, 4))
     t.add_row("q_bid", _fmt_opt_px(snap.q_bid, 4))
     t.add_row("q_ask", _fmt_opt_px(snap.q_ask, 4))
-    return Panel(t, title="Quote sim", border_style="magenta")
+    return Panel(t, title="Sim", border_style="magenta")
 
 
-def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str, Any]] = None) -> None:
+def run_depth_tui(
+    symbol: str,
+    rows: int = 15,
+    *,
+    sim_kwargs: Optional[Dict[str, Any]] = None,
+    depth_speed: str = "100ms",
+    refresh_hz: float = 30.0,
+) -> None:
     """Depth ladder + virtual quote sim; ``sim_kwargs`` → ``make_book_tick_handler``."""
     logging.getLogger("l2_sim.execution").setLevel(logging.WARNING)
     logging.getLogger("l2_sim.simulation").setLevel(logging.WARNING)
 
     console = Console(force_terminal=True)
     rows = max(1, min(rows, 500))
+    refresh_hz = max(1.0, min(float(refresh_hz), 60.0))
     boot = Panel("Connecting…", title=symbol.upper(), border_style="cyan")
     sim_kwargs = dict(sim_kwargs or {})
-    sim_kwargs.pop("on_tick", None)
-    sim_kwargs.pop("log_ticks", None)
 
     last_snap: list[Optional[SimTickSnapshot]] = [None]
 
@@ -134,7 +139,7 @@ def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str,
         screen=True,
         transient=True,
         auto_refresh=True,
-        refresh_per_second=30,
+        refresh_per_second=refresh_hz,
         vertical_overflow="visible",
         get_renderable=get_renderable,
         redirect_stdout=True,
@@ -155,6 +160,7 @@ def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str,
                     on_book_event=on_book,
                     status_interval=None,
                     echo_snapshot=False,
+                    depth_speed=depth_speed,
                 )
             )
         except KeyboardInterrupt:

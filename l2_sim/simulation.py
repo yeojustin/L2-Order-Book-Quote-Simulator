@@ -75,7 +75,7 @@ def make_book_tick_handler(
             obi=obi,
             position_base=inv.position_base,
             adverse_events=inv.adverse_events,
-            total_fills=len(engine.fills),
+            total_fills=engine.total_fills,
             tick_fills=len(fills),
             best_bid_px=bb[0] if bb else None,
             best_ask_px=ba[0] if ba else None,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import List, Optional
 
 from l2_sim.l2_book import L2Book
 from l2_sim.quoting import Quote
@@ -24,9 +24,8 @@ class Fill:
 class VirtualExecutionListener:
     """Buy if bid ≥ best ask; sell if ask ≤ best bid (crossing-only, no trade tape)."""
 
-    def __init__(self, on_fill: Optional[Callable[[Fill], None]] = None) -> None:
-        self._on_fill = on_fill
-        self.fills: List[Fill] = []
+    def __init__(self) -> None:
+        self.total_fills: int = 0
 
     def process(self, book: L2Book, quote: Optional[Quote]) -> List[Fill]:
         if quote is None:
@@ -49,8 +48,6 @@ class VirtualExecutionListener:
             new.append(f)
 
         for fill in new:
-            self.fills.append(fill)
+            self.total_fills += 1
             logger.info("virtual fill: %s", fill)
-            if self._on_fill is not None:
-                self._on_fill(fill)
         return new

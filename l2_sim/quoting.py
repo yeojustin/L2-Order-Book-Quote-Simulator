@@ -1,4 +1,4 @@
-"""Fake quotes: sym (mid +/- half) or cross (offset from spread)."""
+"""Simulated quotes: sym (mid +/- half) or cross (offset from spread)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from l2_sim.l2_book import L2Book
 
 @dataclass(frozen=True)
 class Quote:
-    """bid_price / ask_price may be None when that side is not quoted (e.g. manual bid-only)."""
+    """Per-side prices may be None when that side is not quoted (e.g. bid-only)."""
 
     bid_price: Optional[float]
     ask_price: Optional[float]

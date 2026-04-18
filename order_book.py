@@ -64,7 +64,7 @@ def _drain_queue_nowait(queue: "asyncio.Queue[Dict[str, Any]]") -> List[Dict[str
 
 
 def _is_depth_diff_message(msg: Any) -> bool:
-    """True if message looks like a Binance partial depth diff."""
+    """True if message looks like a Binance diff-depth update (b/a rows + U/u)."""
     if not isinstance(msg, dict):
         return False
     if "b" not in msg or "a" not in msg or "U" not in msg or "u" not in msg:
@@ -173,10 +173,11 @@ async def _run_single_connection(
     *,
     status_interval: Optional[float] = 1.0,
     echo_snapshot: bool = True,
+    depth_speed: str = "100ms",
 ) -> None:
     """One WS session: snapshot, merge buffer, then live apply loop."""
     queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
-    uri = depth_stream_url(symbol)
+    uri = depth_stream_url(symbol, speed=depth_speed)
 
     async with websockets.connect(
         uri,
@@ -213,8 +214,12 @@ async def _run_single_connection(
                 except asyncio.TimeoutError as exc:
                     raise TimeoutError("No depth messages for too long; connection may be dead.") from exc
 
+                if not _is_depth_diff_message(event):
+                    continue
+                U, u = int(event["U"]), int(event["u"])
+                if u < book.last_update_id:
+                    continue
                 if not _live_event_ok(book, event, snapshot_id):
-                    U, u = int(event["U"]), int(event["u"])
                     raise RuntimeError(
                         f"Live sequence error: last={book.last_update_id} snap={snapshot_id} U={U} u={u}"
                     )
@@ -240,6 +245,7 @@ async def run_live_book(
     on_book_event: Optional[Callable[..., None]] = None,
     status_interval: Optional[float] = 1.0,
     echo_snapshot: bool = True,
+    depth_speed: str = "100ms",
 ) -> None:
     """Reconnect forever; optional callback after each depth apply."""
     delay = RESYNC_DELAY_START
@@ -252,6 +258,7 @@ async def run_live_book(
                 on_book_event=on_book_event,
                 status_interval=status_interval,
                 echo_snapshot=echo_snapshot,
+                depth_speed=depth_speed,
             )
             delay = RESYNC_DELAY_START
         except asyncio.CancelledError:
@@ -287,6 +294,4 @@ if __name__ == "__main__":
             print("\n[!] Stopped by user.")
             sys.exit(0)
 
-    # ping_depth(DEFAULT_SYMBOL)
-    # test_fetch_snapshot(DEFAULT_SYMBOL)
     run_asyncio_main()
