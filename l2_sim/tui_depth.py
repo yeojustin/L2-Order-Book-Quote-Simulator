@@ -1,16 +1,18 @@
-"""Live Rich TUI: bid/ask depth columns for BinanceOrderBook."""
+"""Live Rich TUI: bid/ask depth + same quote sim as `main.py quote`."""
 
 from __future__ import annotations
 
 import asyncio
+from typing import Any, Dict, Optional
 
 from rich import box
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from l2_sim.simulation import SimTickSnapshot, make_book_tick_handler
 from order_book import BinanceOrderBook, run_live_book
 
 
@@ -18,6 +20,12 @@ def _fmt_num(x: float, decimals: int = 6) -> str:
     s = f"{x:.{decimals}f}"
     s = s.rstrip("0").rstrip(".")
     return s or "0"
+
+
+def _fmt_opt_px(x: Optional[float], decimals: int = 6) -> str:
+    if x is None:
+        return "—"
+    return _fmt_num(x, decimals)
 
 
 def depth_panel(book: BinanceOrderBook, rows: int) -> Panel:
@@ -65,8 +73,29 @@ def depth_panel(book: BinanceOrderBook, rows: int) -> Panel:
     )
 
 
-def run_depth_tui(symbol: str, rows: int = 15) -> None:
-    """Block until disconnect or Ctrl+C; refreshes a Rich Live panel on each depth apply."""
+def _sim_panel(snap: Optional[SimTickSnapshot]) -> Panel:
+    t = Table(box=box.ROUNDED, show_edge=False, padding=(0, 1), expand=True)
+    t.add_column("Field", style="dim", no_wrap=True)
+    t.add_column("Value", no_wrap=True)
+    if snap is None:
+        t.add_row("status", "waiting for book…")
+        return Panel(t, title="Quote sim (same flags as quote)", border_style="magenta")
+
+    t.add_row("mid", _fmt_opt_px(snap.mid, 8))
+    t.add_row("obi", f"{snap.obi:+.3f}" if snap.obi is not None else "—")
+    t.add_row("inv", _fmt_num(snap.position_base, 6))
+    t.add_row("adverse", str(snap.adverse_events))
+    t.add_row("total_fills", str(snap.total_fills))
+    t.add_row("tick_fills", str(snap.tick_fills))
+    t.add_row("bb", _fmt_opt_px(snap.best_bid_px, 4))
+    t.add_row("ba", _fmt_opt_px(snap.best_ask_px, 4))
+    t.add_row("q_bid", _fmt_opt_px(snap.q_bid, 4))
+    t.add_row("q_ask", _fmt_opt_px(snap.q_ask, 4))
+    return Panel(t, title="Quote sim (same flags as quote)", border_style="magenta")
+
+
+def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str, Any]] = None) -> None:
+    """Depth ladder + virtual quote sim; ``sim_kwargs`` passed to ``make_book_tick_handler`` (except ``on_tick`` / ``log_ticks``)."""
     console = Console()
     rows = max(1, min(rows, 500))
     boot = Panel(
@@ -74,10 +103,26 @@ def run_depth_tui(symbol: str, rows: int = 15) -> None:
         title=symbol.upper(),
         border_style="cyan",
     )
+    sim_kwargs = dict(sim_kwargs or {})
+    sim_kwargs.pop("on_tick", None)
+    sim_kwargs.pop("log_ticks", None)
+
+    last_snap: list[Optional[SimTickSnapshot]] = [None]
+
+    def on_snap(s: SimTickSnapshot) -> None:
+        last_snap[0] = s
+
+    sim_on_book = make_book_tick_handler(
+        **sim_kwargs,
+        on_tick=on_snap,
+        log_ticks=False,
+    )
+
     with Live(boot, console=console, refresh_per_second=24, transient=False) as live:
 
         def on_book(book: BinanceOrderBook) -> None:
-            live.update(depth_panel(book, rows))
+            sim_on_book(book)
+            live.update(Group(depth_panel(book, rows), _sim_panel(last_snap[0])))
 
         try:
             asyncio.run(
@@ -90,4 +135,3 @@ def run_depth_tui(symbol: str, rows: int = 15) -> None:
             )
         except KeyboardInterrupt:
             console.print("\n[dim]Stopped.[/dim]")
-# housekeeping: no functional change
