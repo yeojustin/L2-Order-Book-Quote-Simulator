@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from typing import Any, Dict, Optional
 
 from rich import box
@@ -96,7 +97,12 @@ def _sim_panel(snap: Optional[SimTickSnapshot]) -> Panel:
 
 def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str, Any]] = None) -> None:
     """Depth ladder + virtual quote sim; ``sim_kwargs`` passed to ``make_book_tick_handler`` (except ``on_tick`` / ``log_ticks``)."""
-    console = Console()
+    # Integrated terminals (e.g. Cursor) sometimes mis-detect TTY; without this,
+    # Rich falls back to "print each frame" and the UI stacks down the scrollback.
+    console = Console(
+        force_terminal=True,
+        stderr=True,
+    )
     rows = max(1, min(rows, 500))
     boot = Panel(
         "Connecting to Binance depth…",
@@ -118,11 +124,24 @@ def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str,
         log_ticks=False,
     )
 
-    with Live(boot, console=console, refresh_per_second=24, transient=False) as live:
+    # screen=True: alternate buffer so each frame replaces the last (no stacking).
+    # auto_refresh=False: refresh only from our WS callback (avoids racing Live's thread).
+    with Live(
+        boot,
+        console=console,
+        screen=True,
+        transient=True,
+        auto_refresh=False,
+        redirect_stdout=True,
+        redirect_stderr=True,
+    ) as live:
 
         def on_book(book: BinanceOrderBook) -> None:
             sim_on_book(book)
-            live.update(Group(depth_panel(book, rows), _sim_panel(last_snap[0])))
+            live.update(
+                Group(depth_panel(book, rows), _sim_panel(last_snap[0])),
+                refresh=True,
+            )
 
         try:
             asyncio.run(
@@ -134,4 +153,7 @@ def run_depth_tui(symbol: str, rows: int = 15, *, sim_kwargs: Optional[Dict[str,
                 )
             )
         except KeyboardInterrupt:
-            console.print("\n[dim]Stopped.[/dim]")
+            pass
+        finally:
+            if sys.stderr.isatty():
+                console.print("\n[dim]Stopped.[/dim]", stderr=True)
