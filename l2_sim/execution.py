@@ -39,10 +39,12 @@ class VirtualExecutionListener:
         best_bid_px, _ = bb
         best_ask_px, _ = ba
 
-        if quote.bid_price >= best_ask_px:
+        bp = quote.bid_price
+        ap = quote.ask_price
+        if bp is not None and quote.size_bid > 0 and bp >= best_ask_px:
             f = Fill(side="buy", price=float(best_ask_px), size=float(quote.size_bid), ts=time.time())
             new.append(f)
-        if quote.ask_price <= best_bid_px:
+        if ap is not None and quote.size_ask > 0 and ap <= best_bid_px:
             f = Fill(side="sell", price=float(best_bid_px), size=float(quote.size_ask), ts=time.time())
             new.append(f)
 

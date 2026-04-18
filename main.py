@@ -52,6 +52,18 @@ def _parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--log-file", default=None, help="append logs to this path (optional)")
     p.add_argument("--debug", action="store_true", help="DEBUG log level")
+    p.add_argument(
+        "--bid-price",
+        type=float,
+        default=None,
+        help="fixed fake bid only (optional; overrides bid from quote-mode)",
+    )
+    p.add_argument(
+        "--ask-price",
+        type=float,
+        default=None,
+        help="fixed fake ask only (optional; overrides ask from quote-mode)",
+    )
     return p
 
 
@@ -63,6 +75,8 @@ def _maybe_setup_logging(*, quote: bool, log_file: Optional[str], debug: bool) -
 def main() -> None:
     args = _parser().parse_args()
     quote = args.command == "quote"
+    if not quote and (args.bid_price is not None or args.ask_price is not None):
+        raise SystemExit("error: --bid-price / --ask-price only apply to `quote`")
     _maybe_setup_logging(quote=quote, log_file=args.log_file, debug=args.debug)
 
     if quote:
@@ -73,6 +87,8 @@ def main() -> None:
             inventory_gamma=args.inventory_gamma,
             quote_mode=args.quote_mode,
             cross_k=args.cross_k,
+            manual_bid=args.bid_price,
+            manual_ask=args.ask_price,
         )
         asyncio.run(run_live_book(args.symbol, on_book_event=tick))
     else:

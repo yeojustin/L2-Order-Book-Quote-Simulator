@@ -21,6 +21,8 @@ def make_book_tick_handler(
     inventory_gamma: float = 0.02,
     quote_mode: str = "cross",
     cross_k: float = 0.5001,
+    manual_bid: float | None = None,
+    manual_ask: float | None = None,
 ) -> Callable[[Any], None]:
     """Returns a fn(book) for run_live_book(..., on_book_event=...)."""
     inv = InventoryState()
@@ -30,6 +32,8 @@ def make_book_tick_handler(
         inventory_skew_gamma=inventory_gamma,
         quote_mode=quote_mode,
         cross_k=cross_k,
+        manual_bid=manual_bid,
+        manual_ask=manual_ask,
     )
     engine = VirtualExecutionListener()
 
